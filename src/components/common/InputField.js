@@ -7,12 +7,12 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Colors } from '../../constants/colors';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 
 const InputField = ({
   // Formik props
-  field, // { name, value, onChange, onBlur } - optional
-  form, // { touched, errors, setFieldValue, setFieldTouched } - optional
-  
+  field,
+  form, 
   // Input props
   label,
   placeholder,
@@ -27,7 +27,6 @@ const InputField = ({
   maxLength,
   
   // Custom props
-  leftIcon,
   rightIcon,
   onRightIconPress,
   variant = 'default',
@@ -49,9 +48,8 @@ const InputField = ({
   ...props
 }) => {
   const [isFocused, setIsFocused] = useState(false);
-  const [showPassword, setShowPassword] = useState(!secureTextEntry);
+  const [showPassword, setShowPassword] = useState(false);
 
-  // Extract values from field prop or use direct props
   const fieldName = field?.name || props.name;
   const fieldValue = field?.value || value;
   const fieldError = form?.errors?.[fieldName] || error;
@@ -80,13 +78,10 @@ const InputField = ({
 
   const handleChangeText = (text) => {
     if (setFieldValue && fieldName) {
-      // Formik usage
       setFieldValue(fieldName, text);
     } else if (field?.onChange) {
-      // Field prop usage
       field.onChange(fieldName)(text);
     } else if (onChangeText) {
-      // Direct prop usage
       onChangeText(text);
     }
   };
@@ -95,7 +90,6 @@ const InputField = ({
     setShowPassword(!showPassword);
   };
 
-  // Get border color based on state
   const getBorderColor = () => {
     if (displayError) return Colors.error;
     if (isFocused) return Colors.primary;
@@ -103,14 +97,12 @@ const InputField = ({
     return Colors.border;
   };
 
-  // Get background color based on variant
   const getBackgroundColor = () => {
     if (!editable) return Colors.lightGray;
     if (variant === 'filled') return Colors.lightGray;
     return Colors.white;
   };
 
-  // Get input height based on size
   const getInputHeight = () => {
     if (size === 'small') return 48;
     if (size === 'large') return 64;
@@ -140,20 +132,12 @@ const InputField = ({
           variant === 'outlined' && styles.outlinedContainer,
         ]}
       >
-        {/* Left Icon */}
-        {leftIcon && (
-          <View style={styles.leftIconContainer}>
-            <Text style={styles.icon}>{leftIcon}</Text>
-          </View>
-        )}
-
         {/* Text Input */}
         <TextInput
           style={[
             styles.input,
             multiline && styles.multilineInput,
             !editable && styles.disabledInput,
-            leftIcon && styles.inputWithLeftIcon,
             (rightIcon || secureTextEntry) && styles.inputWithRightIcon,
             inputStyle,
           ]}
@@ -184,9 +168,11 @@ const InputField = ({
               style={styles.iconButton}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Text style={styles.icon}>
-                {showPassword ? '👁️' : '👁️‍🗨️'}
-              </Text>
+              <MaterialCommunityIcons
+                name={showPassword ? "eye-off" : "eye"}
+                size={20}
+                color={Colors.gray}
+              />
             </TouchableOpacity>
           ) : rightIcon ? (
             <TouchableOpacity
@@ -195,7 +181,11 @@ const InputField = ({
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               disabled={!onRightIconPress}
             >
-              <Text style={styles.icon}>{rightIcon}</Text>
+              <MaterialCommunityIcons 
+                name={rightIcon} 
+                size={20} 
+                color={Colors.gray} 
+              />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -242,29 +232,19 @@ const styles = StyleSheet.create({
   outlinedContainer: {
     borderWidth: 2,
   },
-  leftIconContainer: {
-    marginRight: 12,
-  },
   rightIconContainer: {
-    marginLeft: 12,
+    marginLeft: 8,
   },
   iconButton: {
     padding: 4,
-  },
-  icon: {
-    fontSize: 18,
-    color: Colors.gray,
   },
   input: {
     flex: 1,
     fontSize: 16,
     color: Colors.black,
-    paddingVertical: 0,
+    paddingVertical: 16,
     paddingHorizontal: 0,
     includeFontPadding: false,
-  },
-  inputWithLeftIcon: {
-    marginLeft: 0,
   },
   inputWithRightIcon: {
     marginRight: 0,

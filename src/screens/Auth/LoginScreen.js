@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,34 +10,118 @@ import {
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
-import { Formik } from 'formik';
 import { Colors } from '../../constants/colors';
-import { Button, InputField, Header } from '../../components/common';
-import { loginValidationSchema } from '../../utils/validators';
+import { Button, InputField } from '../../components/common';
+import AuthService from '../../services/authService';
+import { 
+  validateLoginForm,
+  getFirebaseAuthErrorMessage 
+} from '../../utils/validators';
 
 const LoginScreen = ({ navigation }) => {
-  const handleLogin = async (values, { setSubmitting }) => {
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      console.log('Login data:', values);
-      
-      // Navigate to OTP Verification after successful login
-      navigation.navigate('OTPVerification', {
-        userData: values
-      });
-      
-    } catch (error) {
-      Alert.alert('Login Failed', 'Invalid email/phone or password. Please try again.');
-    } finally {
-      setSubmitting(false);
+  const [formData, setFormData] = useState({
+    emailOrPhone: '',
+    password: ''
+  });
+  
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    if (errors[field]) {
+      setErrors(prev => ({
+        ...prev,
+        [field]: ''
+      }));
     }
   };
 
-  const initialValues = {
-    emailOrPhone: '',
-    password: ''
+  const handleBlur = (field) => {
+    setTouched(prev => ({
+      ...prev,
+      [field]: true
+    }));
+  };
+
+  const handleLogin = async () => {
+    // Validate form
+    const validation = validateLoginForm(formData.emailOrPhone, formData.password);
+    
+    if (!validation.isValid) {
+      setErrors(validation.errors);
+      setTouched({
+        emailOrPhone: true,
+        password: true
+      });
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      // Determine if input is email or phone
+      const isEmail = formData.emailOrPhone.includes('@');
+      let email = formData.emailOrPhone;
+      
+      if (!isEmail) {
+        // Convert phone to email format for Firebase
+        email = `${formData.emailOrPhone}@smartcontacts.com`;
+      }
+
+      const result = await AuthService.signInWithEmail(email, formData.password);
+      
+      if (result.success) {
+        console.log('Login successful:', result.user);
+        
+        navigation.navigate('OTPVerification', {
+          userData: {
+            email: email,
+            phone: formData.emailOrPhone
+          }
+        });
+      } else {
+        const errorMessage = getFirebaseAuthErrorMessage(result.errorCode) || result.error;
+        Alert.alert('Login Failed', errorMessage);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    Alert.prompt(
+      'Forgot Password',
+      'Enter your email address to reset password:',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Send',
+          onPress: async (email) => {
+            if (email) {
+              const result = await AuthService.resetPassword(email);
+              if (result.success) {
+                Alert.alert('Success', result.message);
+              } else {
+                const errorMessage = getFirebaseAuthErrorMessage(result.errorCode) || result.error;
+                Alert.alert('Error', errorMessage);
+              }
+            }
+          },
+        },
+      ],
+      'plain-text'
+    );
   };
 
   return (
@@ -52,118 +136,79 @@ const LoginScreen = ({ navigation }) => {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header Component */}
-          <Header
-            title="Welcome Back"
-            subtitle="Sign in to your Smart Contacts account"
-            onBackPress={() => navigation.goBack()}
-          />
+          <View style={styles.content}>
+            <Text style={styles.title}>Welcome Back</Text>
+            <Text style={styles.subtitle}>
+              Sign in to your Smart Contacts account
+            </Text>
 
-          {/* Formik Form */}
-          <Formik
-            initialValues={initialValues}
-            validationSchema={loginValidationSchema}
-            onSubmit={handleLogin}
-            validateOnMount={true}
-          >
-            {({ 
-              handleChange, 
-              handleBlur, 
-              handleSubmit, 
-              values, 
-              errors, 
-              touched, 
-              isValid,
-              isSubmitting,
-              setFieldValue,
-              setFieldTouched
-            }) => (
-              <View style={styles.form}>
-                {/* Email or Phone Input */}
-                <InputField
-                  field={{ 
-                    name: 'emailOrPhone', 
-                    value: values.emailOrPhone
-                  }}
-                  form={{ 
-                    touched, 
-                    errors, 
-                    setFieldValue, 
-                    setFieldTouched 
-                  }}
-                  label="Login with Email or Phone"
-                  placeholder="Enter your email or phone number"
-                  keyboardType="default"
-                  autoCapitalize="none"
-                  autoComplete="email"
-                  required
-                />
+            <View style={styles.form}>
+              <InputField
+                label="Login with Email or Phone"
+                placeholder="Enter your email or phone number"
+                value={formData.emailOrPhone}
+                onChangeText={(text) => handleInputChange('emailOrPhone', text)}
+                onBlur={() => handleBlur('emailOrPhone')}
+                error={touched.emailOrPhone && errors.emailOrPhone}
+                keyboardType="default"
+                autoCapitalize="none"
+                autoComplete="email"
+                required
+              />
 
-                {/* Password Input */}
-                <InputField
-                  field={{ 
-                    name: 'password', 
-                    value: values.password
-                  }}
-                  form={{ 
-                    touched, 
-                    errors, 
-                    setFieldValue, 
-                    setFieldTouched 
-                  }}
-                  label="Password"
-                  placeholder="Enter your password"
-                  secureTextEntry
-                  autoComplete="password"
-                  required
-                />
+              <InputField
+                label="Password"
+                placeholder="Enter your password"
+                value={formData.password}
+                onChangeText={(text) => handleInputChange('password', text)}
+                onBlur={() => handleBlur('password')}
+                error={touched.password && errors.password}
+                secureTextEntry
+                autoComplete="password"
+                required
+              />
 
-                {/* Forgot Password */}
-                <View style={styles.forgotPasswordContainer}>
-                  <Button
-                    title="Forgot Password?"
-                    variant="ghost"
-                    size="small"
-                    onPress={() => Alert.alert('Forgot Password', 'Feature coming soon!')}
-                    style={styles.forgotPasswordButton}
-                    textStyle={styles.forgotPasswordText}
-                  />
-                </View>
-
-                {/* Sign In Button */}
+              <View style={styles.forgotPasswordContainer}>
                 <Button
-                  title={isSubmitting ? 'Signing In...' : 'Sign In'}
-                  onPress={handleSubmit}
-                  loading={isSubmitting}
-                  disabled={!isValid || isSubmitting}
-                  style={styles.signInButton}
-                  fullWidth
+                  title="Forgot Password?"
+                  variant="ghost"
+                  size="small"
+                  onPress={handleForgotPassword}
+                  style={styles.forgotPasswordButton}
+                  textStyle={styles.forgotPasswordText}
                 />
-
-                {/* Divider */}
-                <View style={styles.divider}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>OR</Text>
-                  <View style={styles.dividerLine} />
-                </View>
-
-                {/* Sign Up Link */}
-                <View style={styles.signUpContainer}>
-                  <Text style={styles.signUpText}>
-                    Don't have an account?{' '}
-                  </Text>
-                  <Button
-                    title="Sign Up"
-                    variant="outline"
-                    size="small"
-                    onPress={() => navigation.navigate('Registration')}
-                    style={styles.signUpButton}
-                    textStyle={styles.signUpButtonText}
-                  />
-                </View>
               </View>
-            )}
-          </Formik>
+
+              <Button
+                title={isLoading ? 'Signing In...' : 'Sign In'}
+                onPress={handleLogin}
+                loading={isLoading}
+                disabled={isLoading}
+                style={styles.signInButton}
+                fullWidth
+              />
+
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>OR</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <View style={styles.signUpContainer}>
+                <Text style={styles.signUpText}>
+                  Don't have an account?{' '}
+                </Text>
+                <Button
+                  title="Sign Up"
+                  variant="outline"
+                  size="small"
+                  onPress={() => navigation.navigate('Registration')}
+                  style={styles.signUpButton}
+                  textStyle={styles.signUpButtonText}
+                />
+              </View>
+            </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -181,8 +226,28 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  content: {
+    flex: 1,
+    paddingHorizontal: 20,
+    justifyContent: 'center',
+    marginTop: 150,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: Colors.primary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 16,
+    color: Colors.secondary,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginBottom: 40,
+  },
   form: {
-    padding: 20,
+    // padding already handled by content
   },
   forgotPasswordContainer: {
     alignItems: 'flex-end',

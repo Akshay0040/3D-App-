@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,35 +10,121 @@ import {
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
-import { Formik } from 'formik';
 import { Colors } from '../../constants/colors';
 import { Button, InputField, Header } from '../../components/common';
-import { registrationValidationSchema } from '../../utils/validators';
+import AuthService from '../../services/authService';
+import { 
+  validateRegistrationForm,
+  getFirebaseAuthErrorMessage 
+} from '../../utils/validators';
 
 const RegistrationScreen = ({ navigation }) => {
-  const handleRegistration = async (values, { setSubmitting }) => {
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('Registration data:', values);
-      
-      // Navigate to Permission Screen
-      navigation.navigate('Permissions', {
-        userData: values
-      });
-    } catch (error) {
-      Alert.alert('Error', 'Registration failed. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const initialValues = {
+  const [formData, setFormData] = useState({
     email: '',
     phone: '',
     password: '',
     confirmPassword: ''
+  });
+  
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleInputChange = (field, value) => {
+    console.log(`Field ${field} changed: ${value}`);
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    // Clear error for this field when user starts typing
+    if (errors[field]) {
+      setErrors(prev => ({
+        ...prev,
+        [field]: ''
+      }));
+    }
+  };
+
+  const handleBlur = (field) => {
+    console.log(`Field ${field} blurred`);
+    setTouched(prev => ({
+      ...prev,
+      [field]: true
+    }));
+  };
+
+  const handleRegistration = async () => {
+     console.log('Registration button clicked');
+    // Validate form
+    const validation = validateRegistrationForm(
+      formData.email,
+      formData.phone,
+      formData.password,
+      formData.confirmPassword
+    );
+
+    console.log('Validation result:', validation);
+    
+    if (!validation.isValid) {
+      console.log('Form validation errors:', validation.errors);
+      setErrors(validation.errors);
+      // Mark all fields as touched to show errors
+      setTouched({
+        email: true,
+        phone: true,
+        password: true,
+        confirmPassword: true
+      });
+      Alert.alert(
+        'Validation Error',
+        Object.values(validation.errors).join('\n'),
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+     console.log('Calling AuthService...');
+    setIsLoading(true);
+    
+    try {
+      console.log('Registration data:', {
+        email: formData.email,
+        phone: formData.phone,
+        password: formData.password
+      })
+
+      const result = await AuthService.signUpWithEmail(
+        formData.email, 
+        formData.password, 
+        formData.phone
+      );
+      console.log('AuthService result:', result);
+      
+      if (result.success) {
+        Alert.alert(
+          'Success!', 
+          'Account created successfully! Please check your email for verification.',
+          [
+            {
+              text: 'OK',
+              onPress: () => navigation.navigate('Login', {
+                userData: formData
+              })
+            }
+          ]
+        );
+      } else {
+        // Handle Firebase errors
+        const errorMessage = getFirebaseAuthErrorMessage(result.errorCode) || result.error;
+         console.log('Registration failed:', errorMessage);
+        Alert.alert('Registration Failed', errorMessage);
+      }
+    } catch (error) {
+      console.log('Registration error:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -53,110 +139,101 @@ const RegistrationScreen = ({ navigation }) => {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header Component */}
-          <Header
-            title="Create Account"
-            subtitle="Join Smart Contacts for smarter connections"
-            onBackPress={() => navigation.goBack()}
-          />
+          <Header onBackPress={() => navigation.goBack()} />
 
-          {/* Formik Form */}
-          <Formik
-            initialValues={initialValues}
-            validationSchema={registrationValidationSchema}
-            onSubmit={handleRegistration}
-            validateOnMount={true}
-          >
-            {({ 
-              handleSubmit, 
-              values, 
-              errors, 
-              touched, 
-              isValid,
-              isSubmitting,
-              setFieldValue,
-              setFieldTouched
-            }) => (
-              <View style={styles.form}>
-                {/* Email Input */}
-                <InputField
-                  field={{ name: 'email', value: values.email }}
-                  form={{ touched, errors, setFieldValue, setFieldTouched }}
-                  label="Email Address"
-                  placeholder="Enter your email"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoComplete="email"
-                  required
-                />
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>Create Account</Text>
+            <Text style={styles.subtitle}>
+              Join Smart Contacts for smarter connections
+            </Text>
+          </View>
 
-                {/* Phone Input */}
-                <InputField
-                  field={{ name: 'phone', value: values.phone }}
-                  form={{ touched, errors, setFieldValue, setFieldTouched }}
-                  label="Phone Number"
-                  placeholder="Enter your phone number"
-                  keyboardType="phone-pad"
-                  autoComplete="tel"
-                  required
-                />
+          <View style={styles.form}>
+            {/* Email Input */}
+            <InputField
+              label="Email Address"
+              placeholder="Enter your email"
+              value={formData.email}
+              onChangeText={(text) => handleInputChange('email', text)}
+              onBlur={() => handleBlur('email')}
+              error={touched.email && errors.email}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+              required
+            />
 
-                {/* Password Input */}
-                <InputField
-                  field={{ name: 'password', value: values.password }}
-                  form={{ touched, errors, setFieldValue, setFieldTouched }}
-                  label="Password"
-                  placeholder="Create a password"
-                  secureTextEntry
-                  autoComplete="password"
-                  required
-                />
+            {/* Phone Input */}
+            <InputField
+              label="Phone Number"
+              placeholder="Enter your phone number"
+              value={formData.phone}
+              onChangeText={(text) => handleInputChange('phone', text)}
+              onBlur={() => handleBlur('phone')}
+              error={touched.phone && errors.phone}
+              keyboardType="phone-pad"
+              autoComplete="tel"
+              required
+            />
 
-                {/* Confirm Password Input */}
-                <InputField
-                  field={{ name: 'confirmPassword', value: values.confirmPassword }}
-                  form={{ touched, errors, setFieldValue, setFieldTouched }}
-                  label="Confirm Password"
-                  placeholder="Confirm your password"
-                  secureTextEntry
-                  autoComplete="password"
-                  required
-                />
+            {/* Password Input */}
+            <InputField
+              label="Password"
+              placeholder="Create a password"
+              value={formData.password}
+              onChangeText={(text) => handleInputChange('password', text)}
+              onBlur={() => handleBlur('password')}
+              error={touched.password && errors.password}
+              secureTextEntry
+              autoComplete="password"
+              required
+            />
 
-                {/* Create Account Button */}
-                <Button
-                  title={isSubmitting ? 'Creating Account...' : 'Create Account'}
-                  onPress={handleSubmit}
-                  loading={isSubmitting}
-                  disabled={!isValid || isSubmitting}
-                  style={styles.createButton}
-                  fullWidth
-                />
+            {/* Confirm Password Input */}
+            <InputField
+              label="Confirm Password"
+              placeholder="Confirm your password"
+              value={formData.confirmPassword}
+              onChangeText={(text) => handleInputChange('confirmPassword', text)}
+              onBlur={() => handleBlur('confirmPassword')}
+              error={touched.confirmPassword && errors.confirmPassword}
+              secureTextEntry
+              autoComplete="password"
+              required
+            />
 
-                {/* Divider */}
-                <View style={styles.divider}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>OR</Text>
-                  <View style={styles.dividerLine} />
-                </View>
+            <View style={styles.buttonContainer}>
+              <Button
+                title={isLoading ? 'Creating Account...' : 'Create Account'}
+                onPress={handleRegistration}
+                loading={isLoading}
+                disabled={isLoading}
+                style={styles.createButton}
+                textStyle={styles.createButtonText}
+                fullWidth
+              />
+            </View>
 
-                {/* Sign In Link */}
-                <View style={styles.signInContainer}>
-                  <Text style={styles.signInText}>
-                    Already have an account?{' '}
-                  </Text>
-                  <Button
-                    title="Sign In"
-                    variant="outline"
-                    size="small"
-                    onPress={() => navigation.navigate('Login')}
-                    style={styles.signInButton}
-                    textStyle={styles.signInButtonText}
-                  />
-                </View>
-              </View>
-            )}
-          </Formik>
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>OR</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <View style={styles.signInContainer}>
+              <Text style={styles.signInText}>
+                Already have an account?{' '}
+              </Text>
+              <Button
+                title="Sign In"
+                variant="outline"
+                size="small"
+                onPress={() => navigation.navigate('Login')}
+                style={styles.signInButton}
+                textStyle={styles.signInButtonText}
+              />
+            </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -174,11 +251,38 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  titleContainer: {
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 10,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: Colors.primary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 16,
+    color: Colors.secondary,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
   form: {
     padding: 20,
+    paddingTop: 10,
+  },
+  buttonContainer: {
+    marginBottom: 20,
   },
   createButton: {
-    marginBottom: 20,
+    backgroundColor: Colors.primary,
+  },
+  createButtonText: {
+    color: Colors.white,
+    fontSize: 18,
+    fontWeight: '600',
   },
   divider: {
     flexDirection: 'row',
