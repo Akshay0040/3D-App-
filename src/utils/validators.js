@@ -1,165 +1,210 @@
-import * as Yup from 'yup';
+// Firebase-based validation functions
+// These match Firebase authentication error codes
 
-// Common validation patterns
-export const emailValidation = Yup.string()
-  .email('Please enter a valid email address')
-  .required('Email address is required');
-
-export const phoneValidation = Yup.string()
-  .matches(/^[0-9]{10}$/, 'Phone number must be exactly 10 digits')
-  .required('Phone number is required');
-
-export const emailOrPhoneValidation = Yup.string()
-  .required('Email or phone number is required')
-  .test('email-or-phone', 'Please enter a valid email or 10-digit phone number', (value) => {
-    if (!value) return false;
-    
-    // Check if it's a valid email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (emailRegex.test(value)) return true;
-    
-    // Check if it's a valid phone number (10 digits)
-    const phoneRegex = /^[0-9]{10}$/;
-    if (phoneRegex.test(value)) return true;
-    
-    return false;
-  });
-
-export const passwordValidation = Yup.string()
-  .min(6, 'Password must be at least 6 characters')
-  .required('Password is required');
-
-export const confirmPasswordValidation = Yup.string()
-  .oneOf([Yup.ref('password'), null], 'Passwords must match')
-  .required('Please confirm your password');
-
-export const otpValidation = Yup.string()
-  .length(6, 'OTP must be exactly 6 digits')
-  .matches(/^[0-9]+$/, 'OTP must contain only numbers')
-  .required('OTP is required');
-
-export const nameValidation = Yup.string()
-  .min(2, 'Name must be at least 2 characters')
-  .max(50, 'Name must be less than 50 characters')
-  .matches(/^[a-zA-Z\s]*$/, 'Name can only contain letters and spaces')
-  .required('Full name is required');
-
-// Complete validation schemas
-export const loginValidationSchema = Yup.object().shape({
-  emailOrPhone: emailOrPhoneValidation,
-  password: passwordValidation,
-});
-
-export const registrationValidationSchema = Yup.object().shape({
-  email: emailValidation,
-  phone: phoneValidation,
-  password: passwordValidation,
-  confirmPassword: confirmPasswordValidation,
-});
-
-export const otpValidationSchema = Yup.object().shape({
-  otp: otpValidation,
-});
-
-export const profileValidationSchema = Yup.object().shape({
-  firstName: nameValidation,
-  lastName: nameValidation,
-  email: emailValidation,
-  phone: phoneValidation,
-});
-
-// Individual field validators (for on-the-fly validation)
 export const validateEmail = (email) => {
-  try {
-    emailValidation.validateSync(email);
-    return null;
-  } catch (error) {
-    return error.message;
+  if (!email || email.trim() === '') {
+    return 'Email address is required';
   }
+  
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return 'Please enter a valid email address';
+  }
+  
+  return null; // No error
 };
 
 export const validatePhone = (phone) => {
-  try {
-    phoneValidation.validateSync(phone);
-    return null;
-  } catch (error) {
-    return error.message;
+  if (!phone || phone.trim() === '') {
+    return 'Phone number is required';
   }
-};
-
-export const validateEmailOrPhone = (emailOrPhone) => {
-  try {
-    emailOrPhoneValidation.validateSync(emailOrPhone);
-    return null;
-  } catch (error) {
-    return error.message;
+  
+  const phoneRegex = /^[0-9]{10}$/;
+  if (!phoneRegex.test(phone.replace(/[^0-9]/g, ''))) {
+    return 'Phone number must be exactly 10 digits';
   }
+  
+  return null;
 };
 
 export const validatePassword = (password) => {
-  try {
-    passwordValidation.validateSync(password);
-    return null;
-  } catch (error) {
-    return error.message;
+  if (!password || password.trim() === '') {
+    return 'Password is required';
   }
+  
+  if (password.length < 6) {
+    return 'Password must be at least 6 characters';
+  }
+  
+  // Firebase doesn't require uppercase/lowercase rules by default
+  // But we can add them for better security
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasLowerCase = /[a-z]/.test(password);
+  const hasNumbers = /\d/.test(password);
+  
+  if (!hasUpperCase || !hasLowerCase || !hasNumbers) {
+    return 'Password must contain at least one uppercase letter, one lowercase letter, and one number';
+  }
+  
+  return null;
+};
+
+export const validateConfirmPassword = (password, confirmPassword) => {
+  if (!confirmPassword || confirmPassword.trim() === '') {
+    return 'Please confirm your password';
+  }
+  
+  if (password !== confirmPassword) {
+    return 'Passwords do not match';
+  }
+  
+  return null;
+};
+
+export const validateEmailOrPhone = (input) => {
+  if (!input || input.trim() === '') {
+    return 'Email or phone number is required';
+  }
+  
+  // Check if it's an email
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (emailRegex.test(input)) {
+    return null;
+  }
+  
+  // Check if it's a phone number
+  const phoneRegex = /^[0-9]{10}$/;
+  if (phoneRegex.test(input.replace(/[^0-9]/g, ''))) {
+    return null;
+  }
+  
+  return 'Please enter a valid email or 10-digit phone number';
 };
 
 export const validateOTP = (otp) => {
-  try {
-    otpValidation.validateSync(otp);
-    return null;
-  } catch (error) {
-    return error.message;
+  if (!otp || otp.trim() === '') {
+    return 'OTP is required';
+  }
+  
+  const otpRegex = /^[0-9]{6}$/;
+  if (!otpRegex.test(otp)) {
+    return 'OTP must be exactly 6 digits';
+  }
+  
+  return null;
+};
+
+// Firebase error code to user-friendly message mapping
+export const getFirebaseAuthErrorMessage = (errorCode) => {
+  switch (errorCode) {
+    // Registration errors
+    case 'auth/email-already-in-use':
+      return 'This email is already registered. Please use a different email or try logging in.';
+    
+    case 'auth/invalid-email':
+      return 'Invalid email address format. Please check your email.';
+    
+    case 'auth/weak-password':
+      return 'Password is too weak. Please use a stronger password with at least 6 characters.';
+    
+    case 'auth/missing-password':
+      return 'Password is required.';
+    
+    // Login errors
+    case 'auth/user-not-found':
+      return 'No account found with this email. Please check your email or sign up.';
+    
+    case 'auth/wrong-password':
+      return 'Incorrect password. Please try again or use "Forgot Password".';
+    
+    case 'auth/invalid-credential':
+      return 'Invalid email or password. Please check your credentials.';
+    
+    case 'auth/user-disabled':
+      return 'This account has been disabled. Please contact support.';
+    
+    case 'auth/too-many-requests':
+      return 'Too many failed attempts. Please try again later or reset your password.';
+    
+    // Network errors
+    case 'auth/network-request-failed':
+      return 'Network error. Please check your internet connection and try again.';
+    
+    case 'auth/operation-not-allowed':
+      return 'Email/password sign-in is not enabled. Please contact support.';
+    
+    // Email verification
+    case 'auth/email-not-verified':
+      return 'Please verify your email address before signing in. Check your inbox for the verification email.';
+    
+    // Password reset
+    case 'auth/invalid-email':
+      return 'Invalid email address for password reset.';
+    
+    // General errors
+    default:
+      return 'An error occurred. Please try again.';
   }
 };
 
-// Utility functions for form validation
-export const isFormValid = (schema, values) => {
-  try {
-    schema.validateSync(values, { abortEarly: false });
-    return true;
-  } catch (error) {
-    return false;
-  }
+// Complete form validation functions
+export const validateLoginForm = (emailOrPhone, password) => {
+  const errors = {};
+  
+  const emailOrPhoneError = validateEmailOrPhone(emailOrPhone);
+  if (emailOrPhoneError) errors.emailOrPhone = emailOrPhoneError;
+  
+  const passwordError = validatePassword(password);
+  if (passwordError) errors.password = passwordError;
+  
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors
+  };
 };
 
-export const getFormErrors = (schema, values) => {
-  try {
-    schema.validateSync(values, { abortEarly: false });
-    return {};
-  } catch (error) {
-    const errors = {};
-    error.inner.forEach(err => {
-      errors[err.path] = err.message;
-    });
-    return errors;
-  }
+export const validateRegistrationForm = (email, phone, password, confirmPassword) => {
+  const errors = {};
+  
+  const emailError = validateEmail(email);
+  if (emailError) errors.email = emailError;
+  
+  const phoneError = validatePhone(phone);
+  if (phoneError) errors.phone = phoneError;
+  
+  const passwordError = validatePassword(password);
+  if (passwordError) errors.password = passwordError;
+  
+  const confirmPasswordError = validateConfirmPassword(password, confirmPassword);
+  if (confirmPasswordError) errors.confirmPassword = confirmPasswordError;
+  
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors
+  };
 };
 
-// Export everything
+// Utility to check if form is valid
+export const isFormValid = (errors) => {
+  return Object.keys(errors).length === 0;
+};
+
 export default {
-  // Schemas
-  loginValidationSchema,
-  registrationValidationSchema,
-  otpValidationSchema,
-  profileValidationSchema,
-  
-  // Individual validations
-  emailValidation,
-  phoneValidation,
-  emailOrPhoneValidation,
-  passwordValidation,
-  confirmPasswordValidation,
-  otpValidation,
-  nameValidation,
-  
-  // Utility functions
+  // Field validators
   validateEmail,
   validatePhone,
-  validateEmailOrPhone,
   validatePassword,
+  validateConfirmPassword,
+  validateEmailOrPhone,
   validateOTP,
+  
+  // Firebase error handling
+  getFirebaseAuthErrorMessage,
+  
+  // Form validators
+  validateLoginForm,
+  validateRegistrationForm,
+  
+  // Utility
   isFormValid,
-  getFormErrors,
 };
