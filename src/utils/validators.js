@@ -1,3 +1,6 @@
+// Add console logs for debugging
+console.log('📦 validators.js loaded successfully');
+
 // Remove email validators, add name validators
 export const validateFirstName = (firstName) => {
   if (!firstName || firstName.trim() === '') {
@@ -55,24 +58,82 @@ export const validatePhoneForAuth = (phone) => {
   return null;
 };
 
+// ✅ ADD THESE MISSING FUNCTIONS:
+export const validatePassword = (password) => {
+  console.log('🔐 validatePassword called, length:', password?.length || 0);
+  
+  if (!password || password.trim() === '') {
+    return 'Password is required';
+  }
+  
+  if (password.length < 6) {
+    return 'Password must be at least 6 characters';
+  }
+  
+  // Optional password strength (comment out if too strict)
+  /*
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasLowerCase = /[a-z]/.test(password);
+  const hasNumbers = /\d/.test(password);
+  
+  if (!hasUpperCase || !hasLowerCase || !hasNumbers) {
+    return 'Password must contain uppercase, lowercase letters and numbers';
+  }
+  */
+  
+  return null;
+};
+
+export const validateConfirmPassword = (password, confirmPassword) => {
+  console.log('🔐 validateConfirmPassword called');
+  console.log('Password:', password ? '[HIDDEN]' : 'empty');
+  console.log('Confirm Password:', confirmPassword ? '[HIDDEN]' : 'empty');
+  
+  if (!confirmPassword || confirmPassword.trim() === '') {
+    return 'Please confirm your password';
+  }
+  
+  if (password !== confirmPassword) {
+    return 'Passwords do not match';
+  }
+  
+  return null;
+};
+
 // Update registration form validator
 export const validateRegistrationForm = (firstName, lastName, phone, password, confirmPassword) => {
+  console.log('🔄 validateRegistrationForm called with:', {
+    firstName: firstName || 'empty',
+    lastName: lastName || 'empty',
+    phone: phone || 'empty',
+    password: password ? '[HIDDEN]' : 'empty',
+    confirmPassword: confirmPassword ? '[HIDDEN]' : 'empty'
+  });
+  
   const errors = {};
   
   const firstNameError = validateFirstName(firstName);
+  console.log('📝 First Name validation:', firstNameError || '✅ OK');
   if (firstNameError) errors.firstName = firstNameError;
   
   const lastNameError = validateLastName(lastName);
+  console.log('📝 Last Name validation:', lastNameError || '✅ OK');
   if (lastNameError) errors.lastName = lastNameError;
   
   const phoneError = validatePhoneForAuth(phone);
+  console.log('📝 Phone validation:', phoneError || '✅ OK');
   if (phoneError) errors.phone = phoneError;
   
   const passwordError = validatePassword(password);
+  console.log('📝 Password validation:', passwordError || '✅ OK');
   if (passwordError) errors.password = passwordError;
   
   const confirmPasswordError = validateConfirmPassword(password, confirmPassword);
+  console.log('📝 Confirm Password validation:', confirmPasswordError || '✅ OK');
   if (confirmPasswordError) errors.confirmPassword = confirmPasswordError;
+  
+  console.log('📊 Final errors object:', errors);
+  console.log('✅ isValid:', Object.keys(errors).length === 0);
   
   return {
     isValid: Object.keys(errors).length === 0,
@@ -82,6 +143,8 @@ export const validateRegistrationForm = (firstName, lastName, phone, password, c
 
 // Update login form validator
 export const validateLoginForm = (phone, password) => {
+  console.log('🔑 validateLoginForm called');
+  
   const errors = {};
   
   const phoneError = validatePhoneForAuth(phone);
@@ -95,3 +158,9 @@ export const validateLoginForm = (phone, password) => {
     errors
   };
 };
+
+// Keep existing Firebase error mapping and other functions...
+// ... (rest of your existing code)
+
+// Add debug export at the end
+console.log('✅ All validators.js functions exported');

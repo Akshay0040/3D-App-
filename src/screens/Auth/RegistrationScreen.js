@@ -61,10 +61,7 @@ const RegistrationScreen = ({ navigation }) => {
       formData.confirmPassword
     );
 
-    console.log('Validation Result:', validation);
-
     if (!validation.isValid) {
-       console.log('❌ Validation failed with errors:', validation.errors);
       setErrors(validation.errors);
       setTouched({
         firstName: true,
@@ -73,11 +70,19 @@ const RegistrationScreen = ({ navigation }) => {
         password: true,
         confirmPassword: true
       });
-      // Show alert with first error
-      const firstErrorKey = Object.keys(validation.errors)[0];
-      if (firstErrorKey) {
-        Alert.alert('Validation Error', validation.errors[firstErrorKey]);
-      }
+
+      const errorMessages = Object.values(validation.errors).join('\n• ');
+      setTimeout(() => {
+      Alert.alert(
+        'Please fix the following:',
+        `• ${errorMessages}`,
+        [{ 
+          text: 'OK', 
+          onPress: () => console.log('Validation alert closed') 
+        }]
+      );
+    }, 100);
+
       return;
     }
 
@@ -86,6 +91,7 @@ const RegistrationScreen = ({ navigation }) => {
     setIsLoading(true);
 
     try {
+       console.log('📞 Calling AuthService.registerUser...');
       const result = await AuthService.registerUser(
         formData.firstName,
         formData.lastName,
@@ -93,35 +99,62 @@ const RegistrationScreen = ({ navigation }) => {
         formData.password
       );
 
-      console.log('AuthService Result:', result);
+      console.log('Registration Result:', result);
 
-      if (result.success) {
-        Alert.alert(
-          'Success!',
-          'Account created! Please verify your phone number.',
-          [
-            {
-              text: 'Verify Now',
-              onPress: () => {
-                console.log('Navigating to PhoneVerification...');
-                navigation.navigate('PhoneVerification', {
-                phone: formData.phone,
-                userData: result.user
-              })
-             }
-            }
-          ]
-        );
-      } else {
-        Alert.alert('Registration Failed', result.error  || 'Unknown error');
-      }
-    } catch (error) {
-       console.error('Registration error:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
-    } finally {
-      setIsLoading(false);
+  //     if (result.success) {
+  //       Alert.alert(
+  //         'Success!',
+  //         'Account created! Please verify your phone number.',
+  //         [
+  //           {
+  //             text: 'Verify Now',
+  //             onPress: () => {
+  //               console.log('Navigating to PhoneVerification...');
+  //               navigation.navigate('PhoneVerification', {
+  //                 phone: formData.phone,
+  //                 userData: result.user
+  //               })
+  //             }
+  //           }
+  //         ]
+  //       );
+  //     } else {
+  //       Alert.alert('Registration Failed', result.error || 'Unknown error');
+  //     }
+  //   } catch (error) {
+  //     console.error('Error:', error);
+  //     Alert.alert('Error', 'Something went wrong');
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
+
+  if (result.success) {
+      // Navigate directly to OTP verification
+      console.log('🧭 Navigating to PhoneVerification...');
+      
+      navigation.navigate('PhoneVerification', {
+        phone: formData.phone,
+        // userData: result.user,
+        confirmation: result.confirmation, // Firebase confirmation object
+        registrationData: {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          phone: formData.phone,
+          password: formData.password
+        }
+      });
+      
+    } else {
+      Alert.alert('Registration Failed', result.error);
     }
-  };
+  } catch (error) {
+    console.error('Error:', error);
+    Alert.alert('Error', 'Something went wrong');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <SafeAreaView style={styles.container}>
@@ -216,11 +249,11 @@ const RegistrationScreen = ({ navigation }) => {
                 title={isLoading ? 'Creating Account...' : 'Create Account'}
                 // onPress={handleRegistration}
                 onPress={() => {
-                  console.log('Button Pressed!'); // ✅ Add this
+                  console.log('Button Pressed!'); 
                   handleRegistration();
                 }}
                 loading={isLoading}
-                // disabled={isLoading}
+                disabled={isLoading}
                 style={styles.createButton}
                 fullWidth
               />
@@ -246,7 +279,6 @@ const RegistrationScreen = ({ navigation }) => {
   );
 };
 
-// Styles remain similar, just update as needed
 const styles = StyleSheet.create({
   container: {
     flex: 1,
