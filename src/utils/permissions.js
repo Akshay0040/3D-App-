@@ -6,7 +6,7 @@ export const requestPermissions = async () => {
       const permissions = [
         PermissionsAndroid.PERMISSIONS.CAMERA,
         PermissionsAndroid.PERMISSIONS.READ_CONTACTS,
-        PermissionsAndroid.PERMISSIONS.READ_SMS,
+        // PermissionsAndroid.PERMISSIONS.READ_SMS,
         PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
       ];
 

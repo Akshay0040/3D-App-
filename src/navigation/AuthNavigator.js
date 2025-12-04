@@ -3,8 +3,8 @@ import { createStackNavigator } from '@react-navigation/stack';
 import SplashScreen from '../screens/Auth/SplashScreen';
 import LoginScreen from '../screens/Auth/LoginScreen';
 import RegistrationScreen from '../screens/Auth/RegistrationScreen';
-import PermissionScreen from '../screens/Auth/PermissionScreen';
-import OTPVerificationScreen from '../screens/Auth/OTPVerificationScreen';
+import PhoneVerificationScreen from '../screens/Auth/PhoneVerificationScreen';
+// import ForgotPasswordScreen from '../screens/Auth/ForgotPasswordScreen'; 
 
 const Stack = createStackNavigator();
 
@@ -21,8 +21,8 @@ const AuthNavigator = () => {
       <Stack.Screen name="Splash" component={SplashScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Registration" component={RegistrationScreen} />
-      <Stack.Screen name="Permissions" component={PermissionScreen} />
-      <Stack.Screen name="OTPVerification" component={OTPVerificationScreen} />
+      <Stack.Screen name="PhoneVerification" component={PhoneVerificationScreen} />
+      {/* <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} /> */}
     </Stack.Navigator>
   );
 };

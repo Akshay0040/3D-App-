@@ -13,20 +13,24 @@ import {
 import { Colors } from '../../constants/colors';
 import { Button, InputField } from '../../components/common';
 import AuthService from '../../services/authService';
-import { 
-  validateLoginForm,
-  getFirebaseAuthErrorMessage 
-} from '../../utils/validators';
+import { validateLoginForm } from '../../utils/validators';
 
-const LoginScreen = ({ navigation }) => {
+const LoginScreen = ({ navigation, route }) => {
   const [formData, setFormData] = useState({
-    emailOrPhone: '',
+    phone: '',
     password: ''
   });
   
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+
+  // Check for success message from verification
+  React.useEffect(() => {
+    if (route.params?.message) {
+      Alert.alert('Success', route.params.message);
+    }
+  }, [route.params]);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -51,12 +55,12 @@ const LoginScreen = ({ navigation }) => {
 
   const handleLogin = async () => {
     // Validate form
-    const validation = validateLoginForm(formData.emailOrPhone, formData.password);
+    const validation = validateLoginForm(formData.phone, formData.password);
     
     if (!validation.isValid) {
       setErrors(validation.errors);
       setTouched({
-        emailOrPhone: true,
+        phone: true,
         password: true
       });
       return;
@@ -65,63 +69,55 @@ const LoginScreen = ({ navigation }) => {
     setIsLoading(true);
     
     try {
-      // Determine if input is email or phone
-      const isEmail = formData.emailOrPhone.includes('@');
-      let email = formData.emailOrPhone;
-      
-      if (!isEmail) {
-        // Convert phone to email format for Firebase
-        email = `${formData.emailOrPhone}@smartcontacts.com`;
-      }
-
-      const result = await AuthService.signInWithEmail(email, formData.password);
+      const result = await AuthService.loginWithPhone(formData.phone, formData.password);
       
       if (result.success) {
-        console.log('Login successful:', result.user);
-        
-        navigation.navigate('OTPVerification', {
-          userData: {
-            email: email,
-            phone: formData.emailOrPhone
-          }
-        });
+        // Navigate to Main App
+        Alert.alert(
+          'Login Successful',
+          `Welcome back, ${result.user.firstName}!`,
+          [
+            {
+              text: 'Continue',
+              onPress: () => {
+                // Reset navigation stack and go to Main
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Main' }],
+                });
+              }
+            }
+          ]
+        );
       } else {
-        const errorMessage = getFirebaseAuthErrorMessage(result.errorCode) || result.error;
-        Alert.alert('Login Failed', errorMessage);
+        // Check if needs phone verification
+        if (result.needsVerification) {
+          Alert.alert(
+            'Phone Not Verified',
+            result.error,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { 
+                text: 'Verify Now', 
+                onPress: () => navigation.navigate('PhoneVerification', {
+                  phone: formData.phone
+                })
+              }
+            ]
+          );
+        } else {
+          Alert.alert('Login Failed', result.error);
+        }
       }
     } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      Alert.alert('Error', 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleForgotPassword = async () => {
-    Alert.prompt(
-      'Forgot Password',
-      'Enter your email address to reset password:',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Send',
-          onPress: async (email) => {
-            if (email) {
-              const result = await AuthService.resetPassword(email);
-              if (result.success) {
-                Alert.alert('Success', result.message);
-              } else {
-                const errorMessage = getFirebaseAuthErrorMessage(result.errorCode) || result.error;
-                Alert.alert('Error', errorMessage);
-              }
-            }
-          },
-        },
-      ],
-      'plain-text'
-    );
+  const handleForgotPassword = () => {
+    navigation.navigate('ForgotPassword');
   };
 
   return (
@@ -137,22 +133,24 @@ const LoginScreen = ({ navigation }) => {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.content}>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>
-              Sign in to your Smart Contacts account
-            </Text>
+            <View style={styles.header}>
+              <Text style={styles.title}>Welcome Back</Text>
+              <Text style={styles.subtitle}>
+                Sign in with your phone number
+              </Text>
+            </View>
 
             <View style={styles.form}>
               <InputField
-                label="Login with Email or Phone"
-                placeholder="Enter your email or phone number"
-                value={formData.emailOrPhone}
-                onChangeText={(text) => handleInputChange('emailOrPhone', text)}
-                onBlur={() => handleBlur('emailOrPhone')}
-                error={touched.emailOrPhone && errors.emailOrPhone}
-                keyboardType="default"
-                autoCapitalize="none"
-                autoComplete="email"
+                label="Phone Number"
+                placeholder="Enter your 10-digit mobile number"
+                value={formData.phone}
+                onChangeText={(text) => handleInputChange('phone', text)}
+                onBlur={() => handleBlur('phone')}
+                error={touched.phone && errors.phone}
+                keyboardType="phone-pad"
+                // maxLength={10}
+                autoComplete="tel"
                 required
               />
 
@@ -188,20 +186,14 @@ const LoginScreen = ({ navigation }) => {
                 fullWidth
               />
 
-              <View style={styles.divider}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>OR</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
               <View style={styles.signUpContainer}>
                 <Text style={styles.signUpText}>
                   Don't have an account?{' '}
                 </Text>
                 <Button
                   title="Sign Up"
-                  variant="outline"
-                  size="small"
+                  variant="ghost"
+                  size="medium"
                   onPress={() => navigation.navigate('Registration')}
                   style={styles.signUpButton}
                   textStyle={styles.signUpButtonText}
@@ -215,94 +207,67 @@ const LoginScreen = ({ navigation }) => {
   );
 };
 
+// Update styles as needed
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.white,
+  container: { 
+    flex: 1, 
+    backgroundColor: Colors.white 
   },
-  keyboardAvoid: {
-    flex: 1,
+  keyboardAvoid: { 
+    flex: 1 
   },
-  scrollView: {
-    flex: 1,
+  scrollView: { 
+    flex: 1 
   },
-  content: {
-    flex: 1,
-    paddingHorizontal: 20,
-    justifyContent: 'center',
-    marginTop: 150,
+  content: { 
+    paddingHorizontal: 24, 
+    paddingTop: "50%",
+    // backgroundColor: Colors.error 
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: Colors.primary,
+  header: { 
+    marginBottom: 40 ,
+    alignItems: 'center',
+  },
+  title: { 
+    fontSize: 32, 
+    fontWeight: 'bold', 
+    color: Colors.black, 
     marginBottom: 8,
-    textAlign: 'center',
   },
-  subtitle: {
-    fontSize: 16,
-    color: Colors.secondary,
-    lineHeight: 22,
-    textAlign: 'center',
-    marginBottom: 40,
+  subtitle: { 
+    fontSize: 16, 
+    color: Colors.gray 
   },
-  form: {
-    // padding already handled by content
+  // form: {  },
+  forgotPasswordContainer: { 
+    alignItems: 'flex-end',  
+    marginBottom: 4,
+    // backgroundColor: Colors.error  
   },
-  forgotPasswordContainer: {
-    alignItems: 'flex-end',
-    marginBottom: 20,
+  forgotPasswordButton: { 
+    padding: 0 
   },
-  forgotPasswordButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    padding: 0,
+  forgotPasswordText: { 
+    fontSize: 14 
   },
-  forgotPasswordText: {
-    color: Colors.primary,
-    fontSize: 14,
-    fontWeight: 'normal',
+  signInButton: { 
+    height: 56, 
+    marginTop: 8 
   },
-  signInButton: {
-    marginBottom: 20,
-  },
-  divider: {
-    flexDirection: 'row',
+  signUpContainer: { 
+    flexDirection: 'row', 
+    justifyContent: 'center', 
     alignItems: 'center',
-    marginVertical: 20,
+    marginTop: 32,
+    paddingBottom: 40
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.border,
+  signUpText: { 
+    fontSize: 17, 
+    color: Colors.gray 
   },
-  dividerText: {
-    marginHorizontal: 15,
-    color: Colors.gray,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  signUpContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  signUpText: {
-    color: Colors.secondary,
-    fontSize: 16,
-  },
-  signUpButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    padding: 0,
-    height: 'auto',
-  },
-  signUpButtonText: {
-    color: Colors.primary,
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  // signUpButton: { 
+  //   // marginLeft: 8 
+  // }
 });
 
 export default LoginScreen;

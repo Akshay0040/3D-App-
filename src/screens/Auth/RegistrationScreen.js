@@ -13,31 +13,28 @@ import {
 import { Colors } from '../../constants/colors';
 import { Button, InputField, Header } from '../../components/common';
 import AuthService from '../../services/authService';
-import { 
-  validateRegistrationForm,
-  getFirebaseAuthErrorMessage 
-} from '../../utils/validators';
+import { validateRegistrationForm } from '../../utils/validators';
 
 const RegistrationScreen = ({ navigation }) => {
   const [formData, setFormData] = useState({
-    email: '',
+    firstName: '',
+    lastName: '',
     phone: '',
     password: '',
     confirmPassword: ''
   });
-  
+
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [isLoading, setIsLoading] = useState(false);
 
   const handleInputChange = (field, value) => {
-    console.log(`Field ${field} changed: ${value}`);
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
-    
-    // Clear error for this field when user starts typing
+
+    // Clear error for this field
     if (errors[field]) {
       setErrors(prev => ({
         ...prev,
@@ -47,7 +44,6 @@ const RegistrationScreen = ({ navigation }) => {
   };
 
   const handleBlur = (field) => {
-    console.log(`Field ${field} blurred`);
     setTouched(prev => ({
       ...prev,
       [field]: true
@@ -55,86 +51,119 @@ const RegistrationScreen = ({ navigation }) => {
   };
 
   const handleRegistration = async () => {
-     console.log('Registration button clicked');
+    console.log('🎯 ======= REGISTRATION STARTED =======');
     // Validate form
     const validation = validateRegistrationForm(
-      formData.email,
+      formData.firstName,
+      formData.lastName,
       formData.phone,
       formData.password,
       formData.confirmPassword
     );
 
-    console.log('Validation result:', validation);
-    
     if (!validation.isValid) {
-      console.log('Form validation errors:', validation.errors);
       setErrors(validation.errors);
-      // Mark all fields as touched to show errors
       setTouched({
-        email: true,
+        firstName: true,
+        lastName: true,
         phone: true,
         password: true,
         confirmPassword: true
       });
+
+      const errorMessages = Object.values(validation.errors).join('\n• ');
+      setTimeout(() => {
       Alert.alert(
-        'Validation Error',
-        Object.values(validation.errors).join('\n'),
-        [{ text: 'OK' }]
+        'Please fix the following:',
+        `• ${errorMessages}`,
+        [{ 
+          text: 'OK', 
+          onPress: () => console.log('Validation alert closed') 
+        }]
       );
+    }, 100);
+
       return;
     }
-     console.log('Calling AuthService...');
-    setIsLoading(true);
-    
-    try {
-      console.log('Registration data:', {
-        email: formData.email,
-        phone: formData.phone,
-        password: formData.password
-      })
 
-      const result = await AuthService.signUpWithEmail(
-        formData.email, 
-        formData.password, 
-        formData.phone
+    console.log('✅ Validation passed, calling AuthService...');
+
+    setIsLoading(true);
+
+    try {
+       console.log('📞 Calling AuthService.registerUser...');
+      const result = await AuthService.registerUser(
+        formData.firstName,
+        formData.lastName,
+        formData.phone,
+        formData.password
       );
-      console.log('AuthService result:', result);
+
+      console.log('Registration Result:', result);
+
+  //     if (result.success) {
+  //       Alert.alert(
+  //         'Success!',
+  //         'Account created! Please verify your phone number.',
+  //         [
+  //           {
+  //             text: 'Verify Now',
+  //             onPress: () => {
+  //               console.log('Navigating to PhoneVerification...');
+  //               navigation.navigate('PhoneVerification', {
+  //                 phone: formData.phone,
+  //                 userData: result.user
+  //               })
+  //             }
+  //           }
+  //         ]
+  //       );
+  //     } else {
+  //       Alert.alert('Registration Failed', result.error || 'Unknown error');
+  //     }
+  //   } catch (error) {
+  //     console.error('Error:', error);
+  //     Alert.alert('Error', 'Something went wrong');
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
+
+  if (result.success) {
+      // Navigate directly to OTP verification
+      console.log('🧭 Navigating to PhoneVerification...');
       
-      if (result.success) {
-        Alert.alert(
-          'Success!', 
-          'Account created successfully! Please check your email for verification.',
-          [
-            {
-              text: 'OK',
-              onPress: () => navigation.navigate('Login', {
-                userData: formData
-              })
-            }
-          ]
-        );
-      } else {
-        // Handle Firebase errors
-        const errorMessage = getFirebaseAuthErrorMessage(result.errorCode) || result.error;
-         console.log('Registration failed:', errorMessage);
-        Alert.alert('Registration Failed', errorMessage);
-      }
-    } catch (error) {
-      console.log('Registration error:', error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
-    } finally {
-      setIsLoading(false);
+      navigation.navigate('PhoneVerification', {
+        phone: formData.phone,
+        // userData: result.user,
+        confirmation: result.confirmation, // Firebase confirmation object
+        registrationData: {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          phone: formData.phone,
+          password: formData.password
+        }
+      });
+      
+    } else {
+      Alert.alert('Registration Failed', result.error);
     }
-  };
+  } catch (error) {
+    console.error('Error:', error);
+    Alert.alert('Error', 'Something went wrong');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor={Colors.white} barStyle="dark-content" />
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={styles.keyboardAvoid}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView 
+        <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -144,42 +173,55 @@ const RegistrationScreen = ({ navigation }) => {
           <View style={styles.titleContainer}>
             <Text style={styles.title}>Create Account</Text>
             <Text style={styles.subtitle}>
-              Join Smart Contacts for smarter connections
+              Join with your phone number
             </Text>
           </View>
 
           <View style={styles.form}>
-            {/* Email Input */}
+            {/* First Name */}
             <InputField
-              label="Email Address"
-              placeholder="Enter your email"
-              value={formData.email}
-              onChangeText={(text) => handleInputChange('email', text)}
-              onBlur={() => handleBlur('email')}
-              error={touched.email && errors.email}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
+              label="First Name"
+              placeholder="Enter your first name"
+              value={formData.firstName}
+              onChangeText={(text) => handleInputChange('firstName', text)}
+              onBlur={() => handleBlur('firstName')}
+              error={touched.firstName && errors.firstName}
+              autoCapitalize="words"
+              autoComplete="name-given"
               required
             />
 
-            {/* Phone Input */}
+            {/* Last Name */}
+            <InputField
+              label="Last Name"
+              placeholder="Enter your last name"
+              value={formData.lastName}
+              onChangeText={(text) => handleInputChange('lastName', text)}
+              onBlur={() => handleBlur('lastName')}
+              error={touched.lastName && errors.lastName}
+              autoCapitalize="words"
+              autoComplete="name-family"
+              required
+            />
+
+            {/* Phone Number */}
             <InputField
               label="Phone Number"
-              placeholder="Enter your phone number"
+              placeholder="Enter 10-digit mobile number"
               value={formData.phone}
               onChangeText={(text) => handleInputChange('phone', text)}
               onBlur={() => handleBlur('phone')}
               error={touched.phone && errors.phone}
               keyboardType="phone-pad"
               autoComplete="tel"
+              // maxLength={10}
               required
             />
 
-            {/* Password Input */}
+            {/* Password */}
             <InputField
               label="Password"
-              placeholder="Create a password"
+              placeholder="Create a strong password"
               value={formData.password}
               onChangeText={(text) => handleInputChange('password', text)}
               onBlur={() => handleBlur('password')}
@@ -189,10 +231,10 @@ const RegistrationScreen = ({ navigation }) => {
               required
             />
 
-            {/* Confirm Password Input */}
+            {/* Confirm Password */}
             <InputField
               label="Confirm Password"
-              placeholder="Confirm your password"
+              placeholder="Re-enter your password"
               value={formData.confirmPassword}
               onChangeText={(text) => handleInputChange('confirmPassword', text)}
               onBlur={() => handleBlur('confirmPassword')}
@@ -205,19 +247,16 @@ const RegistrationScreen = ({ navigation }) => {
             <View style={styles.buttonContainer}>
               <Button
                 title={isLoading ? 'Creating Account...' : 'Create Account'}
-                onPress={handleRegistration}
+                // onPress={handleRegistration}
+                onPress={() => {
+                  console.log('Button Pressed!'); 
+                  handleRegistration();
+                }}
                 loading={isLoading}
                 disabled={isLoading}
                 style={styles.createButton}
-                textStyle={styles.createButtonText}
                 fullWidth
               />
-            </View>
-
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>OR</Text>
-              <View style={styles.dividerLine} />
             </View>
 
             <View style={styles.signInContainer}>
@@ -226,8 +265,8 @@ const RegistrationScreen = ({ navigation }) => {
               </Text>
               <Button
                 title="Sign In"
-                variant="outline"
-                size="small"
+                variant="ghost"
+                size="medium"
                 onPress={() => navigation.navigate('Login')}
                 style={styles.signInButton}
                 textStyle={styles.signInButtonText}
@@ -243,84 +282,57 @@ const RegistrationScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.white
   },
   keyboardAvoid: {
-    flex: 1,
+    flex: 1
   },
   scrollView: {
-    flex: 1,
+    flex: 1
   },
   titleContainer: {
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 30,
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 10,
+    // backgroundColor: Colors.error  
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: Colors.primary,
-    marginBottom: 8,
-    textAlign: 'center',
+    color: Colors.black,
+    marginBottom: 8
   },
   subtitle: {
     fontSize: 16,
-    color: Colors.secondary,
-    lineHeight: 22,
-    textAlign: 'center',
+    color: Colors.gray
   },
   form: {
-    padding: 20,
-    paddingTop: 10,
+    paddingHorizontal: 24
   },
   buttonContainer: {
-    marginBottom: 20,
+    // marginTop: 20, 
+    marginBottom: 30,
+    // backgroundColor: Colors.error
   },
   createButton: {
-    backgroundColor: Colors.primary,
-  },
-  createButtonText: {
-    color: Colors.white,
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  dividerText: {
-    marginHorizontal: 15,
-    color: Colors.gray,
-    fontSize: 14,
-    fontWeight: '500',
+    height: 56
   },
   signInContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 30,
+    // marginTop: 20, 
+    // paddingBottom: 40 ,
+    // backgroundColor: Colors.error
   },
   signInText: {
-    color: Colors.secondary,
-    fontSize: 16,
+    fontSize: 17,
+    color: Colors.gray
   },
-  signInButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    padding: 0,
-    height: 'auto',
-  },
-  signInButtonText: {
-    color: Colors.primary,
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  // signInButton: { 
+  //   marginLeft: 8 
+  // }
 });
 
 export default RegistrationScreen;
