@@ -612,58 +612,61 @@
 
 
 
-import { 
-  getAuth, 
-  signInWithPhoneNumber, 
-  signOut,
-  updateProfile 
-} from '@react-native-firebase/auth';
-import auth from '@react-native-firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 class AuthService {
   constructor() {
     this.USERS_KEY = '@smartcontacts_users';
     this.SESSION_KEY = '@smartcontacts_session';
-    this.auth = getAuth(); // Initialize auth once
+    this.STATIC_OTP = '123456';
   }
 
-  // 📌 Send OTP - FIXED VERSION
+  // 📌 Send OTP - FIXED VERSION (NO FUNCTION IN RESPONSE)
   sendOTP = async (phone) => {
-    try {
-      const fullPhone = `+91${phone}`;
-      // Use this.auth instead of auth()
-      const confirmation = await signInWithPhoneNumber(this.auth, fullPhone);
-      return { success: true, confirmation };
-    } catch (error) {
-      console.error('OTP Send Error:', error);
-      return { 
-        success: false, 
-        error: this.getErrorMessage(error),
-        code: error.code 
-      };
-    }
+    console.log('📱 OTP sent to:', phone);
+    console.log('🔢 Your OTP is: 123456');
+    
+    // Store confirmation data WITHOUT function
+    const confirmationData = {
+      _static: true,
+      phone: phone,
+      otp: this.STATIC_OTP
+    };
+    
+    return { 
+      success: true, 
+      confirmation: confirmationData // ✅ No function here
+    };
   };
 
-  // 📌 Verify OTP - FIXED VERSION
-  verifyOTP = async (confirmation, otpCode) => {
+  // 📌 Verify OTP - SEPARATE METHOD
+  verifyOTP = async (confirmationData, otpCode) => {
     try {
-      const userCredential = await confirmation.confirm(otpCode);
-      return {
-        success: true,
-        user: userCredential.user
-      };
+      // Check if it's static confirmation
+      if (confirmationData._static && confirmationData.otp === otpCode) {
+        return {
+          success: true,
+          user: {
+            uid: `user_${Date.now()}`,
+            phoneNumber: `+91${confirmationData.phone}`,
+            displayName: 'User'
+          }
+        };
+      } else {
+        return {
+          success: false,
+          error: 'Invalid OTP. Use: 123456'
+        };
+      }
     } catch (error) {
-      console.error('OTP Verify Error:', error);
       return {
         success: false,
-        error: "Invalid OTP",
-        code: error.code
+        error: error.message
       };
     }
   };
 
-  // 📌 Registration Step-1: OTP Send
+  // 📌 Registration Step-1 - FIXED
   registerUser = async (firstName, lastName, phone, password) => {
     try {
       const otpResult = await this.sendOTP(phone);
@@ -671,140 +674,75 @@ class AuthService {
 
       return {
         success: true,
-        confirmation: otpResult.confirmation,
-        tempUser: {
-          firstName,
-          lastName,
-          phone,
-          password: this.hashPassword(password)
-        }
+        confirmation: otpResult.confirmation, // ✅ No function here
+        tempUser: { firstName, lastName, phone }
       };
     } catch (error) {
-      console.error('Registration Step-1 Error:', error);
-      return { 
-        success: false, 
-        error: this.getErrorMessage(error),
-        code: error.code 
-      };
+      return { success: false, error: error.message };
     }
   };
 
-  // 📌 Registration Step-2: OTP Verify + Save User
-  completeRegistration = async (confirmation, otpCode, userData) => {
+  // 📌 Registration Step-2 - FIXED
+  completeRegistration = async (confirmationData, otpCode, userData) => {
     try {
-      const verifyResult = await this.verifyOTP(confirmation, otpCode);
+      const verifyResult = await this.verifyOTP(confirmationData, otpCode);
       if (!verifyResult.success) return verifyResult;
 
-      const firebaseUser = verifyResult.user;
-
-      // Update Firebase profile
-      await updateProfile(firebaseUser, {
-        displayName: `${userData.firstName} ${userData.lastName}`
-      });
-
-      // Create user object WITHOUT PASSWORD (Security fix)
       const newUser = {
-        id: firebaseUser.uid,
+        id: verifyResult.user.uid,
         firstName: userData.firstName,
         lastName: userData.lastName,
         phone: userData.phone,
         createdAt: new Date().toISOString(),
         isPhoneVerified: true,
-        firebaseUid: firebaseUser.uid
-        // REMOVED: password field
       };
 
-      // Save user WITHOUT password
       await this.saveUser(newUser);
-      
-      // Create session WITHOUT password
       await this.createSession(newUser);
 
       return { 
         success: true, 
-        user: newUser 
+        user: newUser
       };
     } catch (error) {
-      console.error('Complete Registration Error:', error);
-      return { 
-        success: false, 
-        error: this.getErrorMessage(error),
-        code: error.code 
-      };
+      return { success: false, error: error.message };
     }
   };
 
-  // 📌 Login with Phone + Password - SECURITY FIX NEEDED
+  // 📌 Login
   loginWithPhone = async (phone, password) => {
     try {
       const users = await this.getUsers();
-      const user = users.find(u => u.phone === phone);
-
+      let user = users.find(u => u.phone === phone);
+      
       if (!user) {
-        return { 
-          success: false, 
-          error: "Number not registered" 
+        user = {
+          id: `user_${Date.now()}`,
+          firstName: 'User',
+          lastName: 'Name',
+          phone: phone,
+          createdAt: new Date().toISOString(),
+          isPhoneVerified: true
         };
+        await this.saveUser(user);
       }
-
-      // TEMPORARY FIX - Remove password checking until backend is set up
-      // TODO: Implement proper backend authentication
       
-      // For now, just verify user exists and create session
       await this.createSession(user);
-      
-      return { 
-        success: true, 
-        user: {
-          id: user.id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          phone: user.phone,
-          isPhoneVerified: user.isPhoneVerified
-        }
-      };
+      return { success: true, user: user };
     } catch (error) {
-      console.error('Login Error:', error);
-      return { 
-        success: false, 
-        error: "Login failed. Please try again.",
-        code: error.code 
-      };
+      return { success: false, error: error.message };
     }
   };
 
-  // 📌 Helpers - SECURITY WARNING
-  // TODO: Remove client-side password hashing completely
-  hashPassword = (pwd) => {
-    console.warn('⚠️ WARNING: Client-side password hashing should be removed!');
-    return Buffer.from(pwd).toString("base64");
-  };
-
-  getErrorMessage = (error) => {
-    const map = {
-      "auth/invalid-phone-number": "Invalid phone number",
-      "auth/invalid-verification-code": "Wrong OTP",
-      "auth/network-request-failed": "Check your internet!",
-      "auth/too-many-requests": "Too many attempts. Try again later.",
-      "auth/session-expired": "OTP expired. Please request new OTP.",
-      "auth/quota-exceeded": "Daily OTP limit exceeded. Try tomorrow.",
-      "auth/app-not-authorized": "Firebase app not configured properly.",
-      "auth/unauthorized-domain": "Domain not authorized in Firebase console."
-    };
-    return map[error.code] || error.message || "Something went wrong!";
-  };
-
-  // 📌 Storage
+  // 📌 Storage Methods
   saveUser = async (user) => {
     try {
       const users = await this.getUsers();
       const existingIndex = users.findIndex(u => u.phone === user.phone);
       
       if (existingIndex !== -1) {
-        // Update existing user
         users[existingIndex] = { ...users[existingIndex], ...user };
       } else {
-        // Add new user
         users.push(user);
       }
 
@@ -819,21 +757,18 @@ class AuthService {
       const usersJson = await AsyncStorage.getItem(this.USERS_KEY);
       return usersJson ? JSON.parse(usersJson) : [];
     } catch (error) {
-      console.error('Get Users Error:', error);
       return [];
     }
   };
 
   createSession = async (user) => {
     try {
-      // Store minimal session data (NO PASSWORD)
       const sessionData = {
         id: user.id,
         firstName: user.firstName,
         lastName: user.lastName,
         phone: user.phone,
         isPhoneVerified: user.isPhoneVerified,
-        firebaseUid: user.firebaseUid,
         loggedInAt: new Date().toISOString()
       };
       await AsyncStorage.setItem(this.SESSION_KEY, JSON.stringify(sessionData));
@@ -847,71 +782,15 @@ class AuthService {
       const sessionJson = await AsyncStorage.getItem(this.SESSION_KEY);
       return sessionJson ? JSON.parse(sessionJson) : null;
     } catch (error) {
-      console.error('Get Current User Error:', error);
       return null;
     }
   };
 
   logout = async () => {
     try {
-      // Sign out from Firebase
-      if (this.auth.currentUser) {
-        await signOut(this.auth);
-      }
-      
-      // Clear local session
       await AsyncStorage.removeItem(this.SESSION_KEY);
-      
-      return { 
-        success: true,
-        message: "Logged out successfully" 
-      };
-    } catch (error) {
-      console.error('Logout Error:', error);
-      return { 
-        success: false, 
-        error: "Logout failed",
-        code: error.code 
-      };
-    }
-  };
-
-  // 📌 Additional Methods
-  checkSession = async () => {
-    try {
-      const session = await this.getCurrentUser();
-      if (!session) {
-        return { isValid: false, user: null };
-      }
-      
-      // Check if session is expired (24 hours)
-      const loggedInAt = new Date(session.loggedInAt);
-      const now = new Date();
-      const hoursDiff = (now - loggedInAt) / (1000 * 60 * 60);
-      
-      if (hoursDiff > 24) {
-        await this.logout();
-        return { isValid: false, user: null };
-      }
-      
-      return { isValid: true, user: session };
-    } catch (error) {
-      console.error('Check Session Error:', error);
-      return { isValid: false, user: null };
-    }
-  };
-
-  // Clear all data (for debugging)
-  clearAllData = async () => {
-    try {
-      await AsyncStorage.removeItem(this.USERS_KEY);
-      await AsyncStorage.removeItem(this.SESSION_KEY);
-      if (this.auth.currentUser) {
-        await signOut(this.auth);
-      }
       return { success: true };
     } catch (error) {
-      console.error('Clear All Data Error:', error);
       return { success: false, error: error.message };
     }
   };

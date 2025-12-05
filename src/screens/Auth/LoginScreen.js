@@ -28,9 +28,18 @@ const LoginScreen = ({ navigation, route }) => {
   // Check for success message from verification
   React.useEffect(() => {
     if (route.params?.message) {
-      Alert.alert('Success', route.params.message);
-    }
-  }, [route.params]);
+    // ✅ Show success message from registration
+    Alert.alert('Success', route.params.message, [
+      { 
+        text: 'OK', 
+        onPress: () => {
+          // Clear the params after showing
+          navigation.setParams({ message: undefined });
+        }
+      }
+    ]);
+  }
+}, [route.params]);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
